@@ -1,11 +1,25 @@
-<script setup>
+<script setup lang="ts">
 const { currentPage, total, itemsPerPage, isPaginationLoading } = usePagination();
 const { selectedCameras, toggleCamera } = useCameras()
 
-const cameras = [
-  { id: 1, name: 'Камера №1 Autoroute du Soleil (прямая)' },
-  { id: 2, name: 'Камера №2 Autoroute du Soleil (со съездом)' }
-]
+const isLoading = ref(true);
+const camerasData = ref<any>([]);
+
+const loadData = async () => {
+  try {
+    const [camerasRes] = await Promise.all([
+      fetch("/data/mock/cameras.json"),
+    ]);
+
+    camerasData.value = await camerasRes.json();
+
+
+  } catch (err) {
+    console.error("Ошибка при загрузке данных:", err);
+  } finally {
+    isLoading.value = false;
+  }
+};
 
 const navigateToHeatmap = () => {
   if (selectedCameras.value.length === 0) {
@@ -14,6 +28,10 @@ const navigateToHeatmap = () => {
   }
   navigateTo('/analysis/heatmaps')
 }
+
+onMounted(() => {
+  loadData();
+})
 </script>
 
 <template>
@@ -26,7 +44,7 @@ const navigateToHeatmap = () => {
         <section class="flex flex-col gap-6">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div 
-              v-for="camera in cameras" 
+              v-for="camera in camerasData" 
               :key="camera.id"
               class="p-4 border rounded-lg cursor-pointer transition-all"
               :class="{
@@ -68,7 +86,7 @@ const navigateToHeatmap = () => {
         </section>
       </SectionsContainer>
 
-      <Pagination :items-per-page="itemsPerPage" :total="total" :current-page="currentPage" @update:page="paginate" :disabled="false" />
+      <Pagination :items-per-page="itemsPerPage" :total="total" :current-page="currentPage" :disabled="false" />
     </SectionsMain>
   </SectionsBlocks>
 </template>

@@ -11,12 +11,12 @@ export const navigation = ref([
   },
   {
     title: "Выбор камер для анализа",
-    link: "/analysis/select-cameras",
-    roles: ["operator", "analyst"]
+    link: "/analysis/cameras",
+    roles: ["operator"]
   },
   {
     title: "Просмотр тепловых карт",
-    link: "/analysis/heatmaps",
+    link: "/cameras",
     roles: ["operator", "analyst"]
   },
   {

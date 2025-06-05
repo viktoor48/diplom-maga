@@ -33,6 +33,6 @@ export default defineNuxtConfig({
         lang: "ru",
       },
     },
-    baseURL: "/admin",
+    baseURL: "/",
   },
 });

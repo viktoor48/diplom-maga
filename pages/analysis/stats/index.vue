@@ -21,14 +21,12 @@ const handleFileUpload = (e: Event) => {
 }
 
 const startProcessing = () => {
-  // Обновление кадра каждые 100мс
   frameUpdateInterval.value = setInterval(() => {
     if (frameUrl.value) {
       frameUrl.value = `http://localhost:8000/current_frame?t=${Date.now()}`
     }
   }, 100)
 
-  // Обновление детекций каждые 500мс
   detectionsUpdateInterval.value = setInterval(async () => {
     try {
       const response = await fetch('http://localhost:8000/current_detections')
@@ -41,11 +39,30 @@ const startProcessing = () => {
   }, 500)
 }
 
-const stopProcessing = () => {
-  if (frameUpdateInterval.value) clearInterval(frameUpdateInterval.value)
-  if (detectionsUpdateInterval.value) clearInterval(detectionsUpdateInterval.value)
-  frameUpdateInterval.value = null
-  detectionsUpdateInterval.value = null
+const stopProcessing = async () => {
+  try {
+    // Отправляем запрос на сервер для остановки обработки
+    const response = await fetch('http://localhost:8000/stop_analysis', {
+      method: 'POST'
+    })
+    
+    if (!response.ok) {
+      throw new Error('Не удалось остановить анализ')
+    }
+    
+    console.log('Анализ успешно остановлен')
+  } catch (e) {
+    console.error('Ошибка при остановке анализа:', e)
+    errorMessage.value = 'Ошибка при остановке анализа'
+  } finally {
+    // Останавливаем интервалы обновления на фронтенде
+    if (frameUpdateInterval.value) clearInterval(frameUpdateInterval.value)
+    if (detectionsUpdateInterval.value) clearInterval(detectionsUpdateInterval.value)
+    frameUpdateInterval.value = null
+    detectionsUpdateInterval.value = null
+    isProcessing.value = false
+    isLoading.value = false
+  }
 }
 
 const analyzeVideo = async () => {
@@ -115,6 +132,10 @@ onUnmounted(() => {
       <p class="text-xs text-gray-500">Поддерживаемые форматы: MP4, AVI, MOV</p>
     </div>
 
+    <div v-if="errorMessage" class="p-3 bg-red-100 text-red-700 rounded">
+      {{ errorMessage }}
+    </div>
+
     <div class="flex gap-4">
       <button
         @click="analyzeVideo"
@@ -137,13 +158,12 @@ onUnmounted(() => {
       <button
         @click="stopProcessing"
         :disabled="!isProcessing"
-        class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+        class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
-        Остановить анализ
+        <span>Остановить анализ</span>
       </button>
     </div>
 
-    
     <div v-if="frameUrl" class="mt-4 bg-gray-50 p-4 rounded-lg">
       <h3 class="font-medium mb-2 text-lg">Результат анализа:</h3>
       <img 

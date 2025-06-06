@@ -3,6 +3,7 @@ import { ref, onUnmounted } from 'vue'
 import { useCameras } from '~/composables/useCameras'
 
 const { selectedCameras } = useCameras()
+
 const videoFile = ref<File | null>(null)
 const frameUrl = ref<string>('')
 const isLoading = ref(false)

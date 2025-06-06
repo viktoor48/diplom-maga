@@ -10,8 +10,13 @@ export function useCameras() {
     }
   };
 
+  const resetCameras = () => {
+    selectedCameras.value = [];
+  }
+
   return {
     selectedCameras,
     toggleCamera,
+    resetCameras,
   };
 }

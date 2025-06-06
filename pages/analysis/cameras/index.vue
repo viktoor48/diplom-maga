@@ -1,6 +1,8 @@
 <script setup lang="ts">
 const { currentPage, total, itemsPerPage, isPaginationLoading } = usePagination();
-const { selectedCameras, toggleCamera } = useCameras();
+const { selectedCameras, toggleCamera, resetCameras } = useCameras();
+
+resetCameras();
 
 const isLoading = ref(true);
 const camerasData = ref<any[]>([]);

@@ -66,5 +66,14 @@ export function useFilters() {
     return `С ${formattedStart} по ${formattedEnd}`;
   }
 
-  return { filtersState, resetFilters, updateFilter, updateCustomPeriod, queryString };
+  function getDateRange(): { start: string; end: string } | null {
+  if (!filtersState.value.customPeriod) return null;
+  
+  return {
+    start: new Date(filtersState.value.customPeriod.start).toISOString(),
+    end: new Date(filtersState.value.customPeriod.end).toISOString()
+  };
+}
+
+  return { filtersState, resetFilters, updateFilter, updateCustomPeriod, queryString, getDateRange };
 }

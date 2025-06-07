@@ -1,12 +1,12 @@
 export const navigation = ref([
   {
     title: "Разметка камер",
-    link: "/admin/camera-zones",
+    link: "/admin/camera/zones",
     roles: ["admin"]
   },
   {
     title: "Разметка полигонов",
-    link: "/admin/polygon-zones",
+    link: "/admin/polygon",
     roles: ["admin"]
   },
   {

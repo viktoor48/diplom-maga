@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
 import { useFilters } from '~/composables/useFilters';
 
 const { filtersState, queryString } = useFilters();
 const isLoading = ref(false);
 const error = ref<string | null>(null);
 const success = ref(false);
+
+// Доступные поля для экспорта
+const availableFields = ref([
+  { id: 'timestamp', name: 'Временная метка', selected: true },
+  { id: 'camera_id', name: 'ID камеры', selected: true },
+  { id: 'track_id', name: 'ID трека', selected: true },
+  { id: 'vehicle_type', name: 'Тип ТС', selected: true },
+  { id: 'direction', name: 'Направление', selected: true },
+  { id: 'confidence', name: 'Уверенность', selected: false },
+  { id: 'weight', name: 'Вес', selected: false },
+  { id: 'bbox', name: 'Координаты', selected: false },
+]);
 
 // Вычисляемое свойство для отображения выбранного периода
 const selectedPeriodText = computed(() => {
@@ -17,13 +28,23 @@ const selectedPeriodText = computed(() => {
     : 'За всё время';
 });
 
+// Вычисляемое свойство для строки запроса с выбранными полями
+const fullQueryString = computed(() => {
+  const selectedFields = availableFields.value
+    .filter(field => field.selected)
+    .map(field => field.id)
+    .join(',');
+  
+  return `${queryString.value}&fields=${selectedFields}`;
+});
+
 async function exportReport() {
   isLoading.value = true;
   error.value = null;
   success.value = false;
   
   try {
-    const url = `http://localhost:8000/export_report?${queryString.value}`;
+    const url = `http://localhost:8000/export_report?${fullQueryString.value}`;
     const response = await fetch(url);
     
     // Проверяем, что ответ действительно Excel
@@ -76,6 +97,12 @@ async function exportReport() {
     isLoading.value = false;
   }
 }
+
+function toggleAllFields(selectAll: boolean) {
+  availableFields.value.forEach(field => {
+    field.selected = selectAll;
+  });
+}
 </script>
 
 <template>
@@ -94,6 +121,44 @@ async function exportReport() {
     >
       <p class="font-medium">Будет выгружен отчет:</p>
       <p class="font-semibold">{{ selectedPeriodText }}</p>
+    </div>
+    
+    <!-- Выбор полей для экспорта -->
+    <div class="bg-white p-6 rounded-lg shadow-md mb-6 border border-gray-200">
+      <h2 class="text-lg font-semibold mb-4 text-gray-800">Выберите поля для экспорта</h2>
+      
+      <div class="flex items-center mb-4">
+        <button
+          @click="toggleAllFields(true)"
+          class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded mr-2"
+        >
+          Выбрать все
+        </button>
+        <button
+          @click="toggleAllFields(false)"
+          class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded"
+        >
+          Снять все
+        </button>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div 
+          v-for="field in availableFields" 
+          :key="field.id"
+          class="flex items-center"
+        >
+          <input
+            type="checkbox"
+            :id="`field-${field.id}`"
+            v-model="field.selected"
+            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label :for="`field-${field.id}`" class="ml-2 text-sm text-gray-700">
+            {{ field.name }}
+          </label>
+        </div>
+      </div>
     </div>
     
     <!-- Кнопка выгрузки -->

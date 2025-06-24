@@ -9,6 +9,7 @@ const frameUrl = ref<string>("");
 const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
 const detections = ref<any[]>([]);
+const detectionHistory = ref<any[]>([]);
 const isProcessing = ref(false);
 const socket = ref<WebSocket | null>(null);
 const frameData = ref<{
@@ -45,6 +46,17 @@ const connectWebSocket = () => {
       const blob = new Blob([byteArray], { type: "image/jpeg" });
       frameUrl.value = URL.createObjectURL(blob);
       detections.value = data.detections;
+
+      // Добавляем новые обнаружения в историю (в начало массива)
+      if (data.detections && data.detections.length > 0) {
+        const timestamp = new Date().toLocaleTimeString();
+        data.detections.forEach((det) => {
+          detectionHistory.value.unshift({
+            ...det,
+            timestamp,
+          });
+        });
+      }
     } catch (e) {
       console.error("Error processing WebSocket message:", e);
     }
@@ -62,6 +74,7 @@ const connectWebSocket = () => {
 };
 
 const startProcessing = () => {
+  detectionHistory.value = [];
   connectWebSocket();
 };
 
@@ -133,7 +146,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 p-6 max-w-4xl mx-auto">
+  <div class="flex flex-col gap-6 p-6 w-full">
     <div>
       <h3 class="font-medium mb-2 text-lg">Выбранные камеры:</h3>
       <ul class="list-disc pl-5">
@@ -188,19 +201,30 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <div v-if="frameUrl" class="mt-4 bg-gray-50 p-4 rounded-lg">
-      <h3 class="font-medium mb-2 text-lg">Результат анализа:</h3>
-      <div class="flex items-center gap-2 mb-2 text-sm text-gray-500">
-        <span v-if="frameData">Последнее обновление: {{ new Date(frameData.timestamp).toLocaleTimeString() }}</span>
+    <div class="flex">
+      <div v-if="frameUrl" class="bg-gray-50 p-4 rounded-lg w-full">
+        <h3 class="font-medium mb-2 text-lg">Результат анализа:</h3>
+        <div class="flex items-center gap-2 mb-2 text-sm text-gray-500">
+          <span v-if="frameData">Последнее обновление: {{ new Date(frameData.timestamp).toLocaleTimeString() }}</span>
+        </div>
+        <img :src="frameUrl" class="w-full rounded-lg shadow" alt="Video Stream" />
       </div>
-      <img :src="frameUrl" class="w-full rounded-lg shadow" alt="Video Stream" />
-    </div>
 
-    <div v-if="detections.length > 0" class="mt-4">
-      <h3 class="font-medium mb-2">Обнаружено объектов: {{ detections.length }}</h3>
-      <div class="grid grid-cols-3 gap-2">
-        <div v-for="(det, i) in detections" :key="i" class="p-2 border rounded text-sm">
-          {{ det.type }} ({{ det.direction }}) - {{ (det.confidence * 100).toFixed(1) }}%
+      <div class="w-80 bg-gray-50 p-4 rounded-lg">
+        <h3 class="font-medium mb-4 text-lg top-0 bg-gray-50 py-2">История обнаружений</h3>
+        <div class="flex flex-col space-y-2 max-h-[calc(100vh-7rem)] overflow-y-auto">
+          <div v-for="(detection, index) in detectionHistory" :key="index" class="p-3 border-b border-gray-200 hover:bg-gray-100 transition-colors">
+            <div class="flex justify-between items-start">
+              <span class="font-medium">{{ detection.type }}</span>
+              <span class="text-xs text-gray-500">{{ detection.timestamp }}</span>
+            </div>
+            <div class="text-sm text-gray-600 mt-1">Направление: {{ detection.direction }}</div>
+            <div class="text-sm text-gray-600">Уверенность: {{ (detection.confidence * 100).toFixed(1) }}%</div>
+            <div class="text-xs text-gray-400 mt-1">
+              {{ detection.bbox ? `Позиция: [${detection.bbox.join(", ")}]` : "" }}
+            </div>
+          </div>
+          <div v-if="detectionHistory.length === 0" class="text-center text-gray-500 py-4">Обнаружений пока нет</div>
         </div>
       </div>
     </div>

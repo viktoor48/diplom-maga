@@ -24,7 +24,7 @@ const filteredNavigation = computed(() => {
 </script>
 
 <template>
-  <aside class="flex flex-col w-[21rem] h-screen overflow-y-auto bg-[#FAFAFA] py-10 pr-6 pl-10 border-solid border-r border-gray-100 scroll-hidden">
+  <aside class="flex flex-col w-[21rem] h-screen overflow-y-auto bg-[#FAFAFA] py-10 pr-6 pl-10 border-solid border-r border-gray-100 scroll-hidden sticky top-0">
     <ul class="flex flex-col *:font-medium *:text-[1.125rem] *:leading-[1.3] *:text-[#16350F] gap-2">
       <li v-for="item in filteredNavigation" :key="item.link">
         <nuxt-link class="flex w-full bg-[#FFFFFF] rounded-2xl py-3 px-6 hover:bg-[#D0E5CF] duration-300" :to="item.link" active-class="active-link">

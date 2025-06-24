@@ -1,112 +1,135 @@
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
-import { useCameras } from '~/composables/useCameras'
+import { ref, onUnmounted } from "vue";
+import { useCameras } from "~/composables/useCameras";
 
-const { selectedCameras } = useCameras()
+const { selectedCameras } = useCameras();
 
-const videoFile = ref<File | null>(null)
-const frameUrl = ref<string>('')
-const isLoading = ref(false)
-const errorMessage = ref<string | null>(null)
-const detections = ref<any[]>([])
-const frameUpdateInterval = ref<NodeJS.Timeout | null>(null)
-const detectionsUpdateInterval = ref<NodeJS.Timeout | null>(null)
-const isProcessing = ref(false)
+const videoFile = ref<File | null>(null);
+const frameUrl = ref<string>("");
+const isLoading = ref(false);
+const errorMessage = ref<string | null>(null);
+const detections = ref<any[]>([]);
+const isProcessing = ref(false);
+const socket = ref<WebSocket | null>(null);
+const frameData = ref<{
+  frame: string;
+  detections: any[];
+  timestamp: string;
+} | null>(null);
 
 const handleFileUpload = (e: Event) => {
-  const files = (e.target as HTMLInputElement).files
+  const files = (e.target as HTMLInputElement).files;
   if (files && files[0]) {
-    videoFile.value = files[0]
-    stopProcessing()
+    videoFile.value = files[0];
+    stopProcessing();
   }
-}
+};
+
+const connectWebSocket = () => {
+  if (socket.value) return;
+
+  socket.value = new WebSocket("ws://localhost:8000/ws/video_feed");
+
+  socket.value.onopen = () => {
+    console.log("WebSocket connected");
+  };
+
+  socket.value.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      frameData.value = data;
+
+      // Преобразуем hex строку обратно в изображение
+      const byteArray = new Uint8Array(data.frame.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)));
+
+      const blob = new Blob([byteArray], { type: "image/jpeg" });
+      frameUrl.value = URL.createObjectURL(blob);
+      detections.value = data.detections;
+    } catch (e) {
+      console.error("Error processing WebSocket message:", e);
+    }
+  };
+
+  socket.value.onerror = (error) => {
+    console.error("WebSocket error:", error);
+    errorMessage.value = "Ошибка соединения с сервером";
+  };
+
+  socket.value.onclose = () => {
+    console.log("WebSocket disconnected");
+    socket.value = null;
+  };
+};
 
 const startProcessing = () => {
-  frameUpdateInterval.value = setInterval(() => {
-    if (frameUrl.value) {
-      frameUrl.value = `http://localhost:8000/current_frame?t=${Date.now()}`
-    }
-  }, 100)
-
-  detectionsUpdateInterval.value = setInterval(async () => {
-    try {
-      const response = await fetch('http://localhost:8000/current_detections')
-      if (response.ok) {
-        detections.value = await response.json()
-      }
-    } catch (e) {
-      console.error('Ошибка получения детекций:', e)
-    }
-  }, 500)
-}
+  connectWebSocket();
+};
 
 const stopProcessing = async () => {
   try {
-    // Отправляем запрос на сервер для остановки обработки
-    const response = await fetch('http://localhost:8000/stop_analysis', {
-      method: 'POST'
-    })
-    
+    const response = await fetch("http://localhost:8000/stop_analysis", {
+      method: "POST",
+    });
+
     if (!response.ok) {
-      throw new Error('Не удалось остановить анализ')
+      throw new Error("Не удалось остановить анализ");
     }
-    
-    console.log('Анализ успешно остановлен')
+
+    console.log("Анализ успешно остановлен");
   } catch (e) {
-    console.error('Ошибка при остановке анализа:', e)
-    errorMessage.value = 'Ошибка при остановке анализа'
+    console.error("Ошибка при остановке анализа:", e);
+    errorMessage.value = "Ошибка при остановке анализа";
   } finally {
-    // Останавливаем интервалы обновления на фронтенде
-    if (frameUpdateInterval.value) clearInterval(frameUpdateInterval.value)
-    if (detectionsUpdateInterval.value) clearInterval(detectionsUpdateInterval.value)
-    frameUpdateInterval.value = null
-    detectionsUpdateInterval.value = null
-    isProcessing.value = false
-    isLoading.value = false
+    if (socket.value) {
+      socket.value.close();
+      socket.value = null;
+    }
+    isProcessing.value = false;
+    isLoading.value = false;
+    frameUrl.value = "";
+    detections.value = [];
   }
-}
+};
 
 const analyzeVideo = async () => {
   if (!videoFile.value || selectedCameras.value.length === 0) {
-    errorMessage.value = 'Пожалуйста, выберите видео и камеру'
-    return
+    errorMessage.value = "Пожалуйста, выберите видео и камеру";
+    return;
   }
 
   try {
-    isLoading.value = true
-    isProcessing.value = true
-    errorMessage.value = null
-    detections.value = []
-    frameUrl.value = ''
-    
-    const cameraId = selectedCameras.value[0]
-    const formData = new FormData()
-    formData.append('file', videoFile.value)
+    isLoading.value = true;
+    isProcessing.value = true;
+    errorMessage.value = null;
+    detections.value = [];
+    frameUrl.value = "";
+
+    const cameraId = selectedCameras.value[0];
+    const formData = new FormData();
+    formData.append("file", videoFile.value);
 
     const response = await fetch(`http://localhost:8000/start_analysis/${cameraId}`, {
-      method: 'POST',
-      body: formData
-    })
+      method: "POST",
+      body: formData,
+    });
 
     if (!response.ok) {
-      throw new Error('Ошибка запуска анализа')
+      throw new Error("Ошибка запуска анализа");
     }
 
-    frameUrl.value = `http://localhost:8000/current_frame?t=${Date.now()}`
-    startProcessing()
-
+    startProcessing();
   } catch (error) {
-    console.error('Analysis error:', error)
-    errorMessage.value = error.message || 'Ошибка при анализе видео'
-    stopProcessing()
+    console.error("Analysis error:", error);
+    errorMessage.value = error.message || "Ошибка при анализе видео";
+    stopProcessing();
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
-}
+};
 
 onUnmounted(() => {
-  stopProcessing()
-})
+  stopProcessing();
+});
 </script>
 
 <template>
@@ -167,21 +190,16 @@ onUnmounted(() => {
 
     <div v-if="frameUrl" class="mt-4 bg-gray-50 p-4 rounded-lg">
       <h3 class="font-medium mb-2 text-lg">Результат анализа:</h3>
-      <img 
-        :src="frameUrl" 
-        class="w-full rounded-lg shadow"
-        alt="Video Stream"
-      >
+      <div class="flex items-center gap-2 mb-2 text-sm text-gray-500">
+        <span v-if="frameData">Последнее обновление: {{ new Date(frameData.timestamp).toLocaleTimeString() }}</span>
+      </div>
+      <img :src="frameUrl" class="w-full rounded-lg shadow" alt="Video Stream" />
     </div>
 
     <div v-if="detections.length > 0" class="mt-4">
       <h3 class="font-medium mb-2">Обнаружено объектов: {{ detections.length }}</h3>
       <div class="grid grid-cols-3 gap-2">
-        <div 
-          v-for="(det, i) in detections" 
-          :key="i"
-          class="p-2 border rounded text-sm"
-        >
+        <div v-for="(det, i) in detections" :key="i" class="p-2 border rounded text-sm">
           {{ det.type }} ({{ det.direction }}) - {{ (det.confidence * 100).toFixed(1) }}%
         </div>
       </div>

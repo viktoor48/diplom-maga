@@ -1,124 +1,182 @@
 <script setup lang="ts">
-const cameras = ref<any[]>([]);
-const selectedCameraId = ref<number | null>(null);
-const cameraData = ref<string>("");
-const error = ref<string | null>(null);
-const success = ref<string | null>(null);
+import { ref, onMounted } from 'vue'
 
-// Загрузка существующих камер
-onMounted(async () => {
+const API_URL = 'http://localhost:8000'
+
+// Состояния
+const cameras = ref<any[]>([])
+const selectedCamera = ref<any>(null)
+const zones = ref<any[]>([])
+const isLoading = ref(false)
+const error = ref<string | null>(null)
+const success = ref<string | null>(null)
+
+// Загрузка камер
+const fetchCameras = async () => {
   try {
-    const response = await fetch("http://localhost:8000/cameras");
-    if (!response.ok) throw new Error("Ошибка загрузки камер");
-    cameras.value = await response.json();
+    isLoading.value = true
+    const response = await fetch(`${API_URL}/cameras`)
+    if (!response.ok) throw new Error('Ошибка загрузки камер')
+    cameras.value = await response.json()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "Ошибка загрузки";
-  }
-});
-
-async function submitCameraData() {
-  if (!selectedCameraId.value || !cameraData.value.trim()) {
-    error.value = "Выберите камеру и введите данные";
-    return;
-  }
-
-  try {
-    const data = JSON.parse(cameraData.value);
-
-    const response = await fetch("http://localhost:8000/update_camera", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ camera_id: selectedCameraId.value, data }),
-    });
-
-    if (!response.ok) {
-      const errData = await response.json();
-      throw new Error(errData.detail || "Ошибка сохранения");
-    }
-
-    success.value = `Данные для камеры ${selectedCameraId.value} успешно сохранены`;
-    error.value = null;
-    cameraData.value = "";
-
-    // Обновляем список камер
-    const camerasResponse = await fetch("http://localhost:8000/cameras");
-    cameras.value = await camerasResponse.json();
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : "Ошибка обработки данных";
-    success.value = null;
+    error.value = err instanceof Error ? err.message : 'Неизвестная ошибка'
+  } finally {
+    isLoading.value = false
   }
 }
 
-function formatJson() {
+// Загрузка зон для камеры
+// Загрузка зон для камеры
+const fetchZones = async (cameraId: number) => {
   try {
-    const obj = JSON.parse(cameraData.value);
-    cameraData.value = JSON.stringify(obj, null, 2);
-    error.value = null;
+    isLoading.value = true
+    const response = await fetch(`${API_URL}/cameras/${cameraId}/zones`)
+    if (!response.ok) throw new Error('Ошибка загрузки зон')
+    
+    // Преобразуем полученные зоны в нужный формат
+    const rawZones = await response.json()
+    zones.value = rawZones.map(zone => ({
+      ...zone,
+      // Используем name как direction, если direction не указан
+      direction: zone.name || '', 
+      is_active: true,
+      points: Array.isArray(zone.points) ? zone.points : []
+    }))
+    
   } catch (err) {
-    error.value = "Невалидный JSON";
+    error.value = err instanceof Error ? err.message : 'Неизвестная ошибка'
+  } finally {
+    isLoading.value = false
   }
 }
+
+// Выбор камеры
+const selectCamera = (camera: any) => {
+  selectedCamera.value = camera
+  fetchZones(camera.id)
+}
+
+// Добавление новой зоны
+const addZone = () => {
+  zones.value.push({
+    zone_id: Date.now(), // Уникальный ID
+    name: `Новая зона ${zones.value.length + 1}`,
+    points: [],
+    is_active: true
+  })
+}
+
+// Удаление зоны
+const removeZone = (index: number) => {
+  zones.value.splice(index, 1)
+}
+
+// Сохранение зон
+const saveZones = async () => {
+  if (!selectedCamera.value) return
+  
+  try {
+    isLoading.value = true
+    // Подготавливаем данные для отправки
+    const zonesToSave = zones.value.map(zone => ({
+      zone_id: zone.zone_id,
+      name: zone.name,  // Используем name вместо direction
+      points: zone.points
+    }))
+    
+    const response = await fetch(`${API_URL}/cameras/${selectedCamera.value.id}/zones`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(zonesToSave)
+    })
+    
+    if (!response.ok) throw new Error('Ошибка сохранения')
+    
+    success.value = 'Зоны успешно сохранены'
+    setTimeout(() => success.value = null, 3000)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Неизвестная ошибка'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Инициализация
+onMounted(fetchCameras)
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-8 max-w-4xl">
-    <h1 class="text-2xl font-bold mb-6">Добавление разметки камер</h1>
-
+  <div class="container mx-auto px-4 py-8 max-w-6xl">
+    <h1 class="text-2xl font-bold mb-6">Управление зонами камер</h1>
+    
+    <!-- Выбор камеры -->
     <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-      <div class="mb-4">
-        <label class="block text-gray-700 mb-2">Выберите камеру:</label>
-        <select v-model="selectedCameraId" class="w-full p-2 border rounded-md">
-          <option :value="null">Выберите камеру</option>
-          <option v-for="camera in cameras" :key="camera.id" :value="camera.id">
-            {{ camera.name || `Камера #${camera.id}` }}
-          </option>
-        </select>
-      </div>
-
-      <div class="mb-4">
-        <label class="block text-gray-700 mb-2">Данные камеры (JSON):</label>
-        <textarea v-model="cameraData" class="w-full h-64 p-2 border rounded-md font-mono text-sm" placeholder="Вставьте JSON данные камеры..."></textarea>
-      </div>
-
-      <div class="flex justify-between">
-        <button @click="formatJson" class="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Форматировать JSON</button>
-
+      <h2 class="text-xl font-semibold mb-4">Выберите камеру</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <button
-          @click="submitCameraData"
-          class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          :disabled="!selectedCameraId || !cameraData.trim()"
+          v-for="camera in cameras"
+          :key="camera.id"
+          @click="selectCamera(camera)"
+          class="p-4 border rounded-lg hover:bg-gray-50 transition"
+          :class="{ 'border-blue-500 bg-blue-50': selectedCamera?.id === camera.id }"
         >
-          Сохранить данные
+          <h3 class="font-medium">{{ camera.name }}</h3>
+          <p class="text-sm text-gray-500">ID: {{ camera.id }}</p>
         </button>
       </div>
     </div>
 
-    <!-- Пример данных -->
-    <div class="bg-gray-50 p-4 rounded-lg">
-      <h3 class="font-bold mb-2">Пример данных камеры:</h3>
-      <pre class="text-xs bg-white p-2 rounded overflow-auto max-h-40">
-{
-  "id": 1,
-  "name": "Камера №1 Autoroute du Soleil (прямая)",
-  "image": "/data/mock/images/camera_1.jpg",
-  "zones": [
-    {
-      "zone_id": 7,
-      "name": "eastbound_zone",
-      "points": [[0.1, 0.2], [0.3, 0.4]]
-    }
-  ]
-}</pre
+    <!-- Редактирование зон -->
+    <div v-if="selectedCamera" class="bg-white p-6 rounded-lg shadow-md mb-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold">Зоны камеры: {{ selectedCamera.name }}</h2>
+        <button @click="addZone" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+          Добавить зону
+        </button>
+      </div>
+
+      <div v-for="(zone, index) in zones" :key="index" class="mb-6 p-4 border rounded-lg">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="font-medium">Зона #{{ index + 1 }}</h3>
+          <button @click="removeZone(index)" class="text-red-600 hover:text-red-800">
+            Удалить
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Направление</label>
+            <input v-model="zone.name" type="text" class="w-full p-2 border rounded-md">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Точки зоны (JSON)</label>
+          <textarea 
+            v-model="zone.points"
+            class="w-full h-32 p-2 border rounded-md font-mono text-sm"
+            placeholder="[[x1,y1], [x2,y2], ...]"
+          ></textarea>
+        </div>
+      </div>
+
+      <button 
+        @click="saveZones"
+        class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        :disabled="isLoading"
       >
+        {{ isLoading ? 'Сохранение...' : 'Сохранить изменения' }}
+      </button>
     </div>
 
-    <!-- Сообщения об ошибках/успехе -->
+    <!-- Сообщения -->
     <div v-if="error" class="mt-4 p-3 bg-red-50 text-red-700 rounded-md">
       {{ error }}
+      <button @click="error = null" class="float-right font-bold">×</button>
     </div>
-
     <div v-if="success" class="mt-4 p-3 bg-green-50 text-green-700 rounded-md">
       {{ success }}
+      <button @click="success = null" class="float-right font-bold">×</button>
     </div>
   </div>
 </template>
